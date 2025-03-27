@@ -1,115 +1,133 @@
+from pathlib import Path
 import pandas as pd
+import json
+
 from plotly.subplots import make_subplots
 from plotly import graph_objects as go
 from plotly import express as px
 
-class PF_Load:
-    def get_df_year(year,to_month):
-        # year = 2024; month = 3   -->   load from jan to march
-        df_months = list()
-        for month in range(1,to_month+1):
-            try:
-                df = pd.read_csv(f"../data/{year}-{month:0=2}_worth.csv", skipinitialspace=True, na_filter=False)
+class FinLoad:
+    def load_init_holdings(path: Path, YEAR: int):
+        if path.exists():
+            with open(f"{path}/{YEAR}/{YEAR}_init.json") as file:
+                data = file.read()
+            init_holdings = json.loads(data)
+            return init_holdings
+        else:
+            print(f"{path} does not exist.")
+            return None
+
+    def load_cashflow(path: Path, YEAR: int):
+        if path.exists():
+            dfl = list()
+            for i in range(1,13):
+                try:
+                    filepath = f"{path}/{YEAR}/cashflow/{YEAR}-{i:0=2}_cashflow.csv"
+                    df = pd.read_csv(filepath, skipinitialspace=True, na_filter=False)
+                except Exception as e:
+                    print(e)
+                    continue
                 df.columns = df.columns.str.strip() # remove whitespaces from columns
                 df.Category = df.Category.str.strip()
                 df.Subcategory = df.Subcategory.str.strip()
                 df.Type = df.Type.str.strip()
                 df.Coin = df.Coin.str.strip()
-            except:
-                print(f"Month {month} missing")
-                df = pd.DataFrame()
-            df_months.append(df)
-            del df
+                dfl.append(df)
+            df_year_cashflow = pd.concat(dfl)
+            df_year_cashflow['Date'] = pd.to_datetime(df_year_cashflow['Date'])
+            df_year_cashflow.set_index('Date',inplace=True)
+            return df_year_cashflow
+        else:
+            print(f"{path} does not exist.")
+            return None
 
-        return df_months
-    
-    def get_df_crypto(df_year,crypto):
-        df_year['Date'] = pd.to_datetime(df_year['Date'])
-        df_bitget = df_year.loc[df_year.Type == "Bitget"]
-        df_crypto = df_bitget.loc[df_bitget.Coin == crypto]
-        
-        qty = df_crypto.Qty.tolist()
-        date_format_month = df_crypto['Date'].dt.strftime('%Y-%m').values
-        zipped = zip(date_format_month, qty)
-        return pd.DataFrame(zipped,columns=["Date","Qty"]).groupby(["Date"]).sum("Qty")
+    def load_investments(path: Path, YEAR: int):
+        if path.exists():
+            dfl = list()
+            for i in range(1,13):
+                try:
+                    filepath = f"{path}/{YEAR}/investments/{YEAR}-{i:0=2}_investments.csv"
+                    df = pd.read_csv(filepath, skipinitialspace=True, na_filter=False)
 
-    def get_crypto_holdings(df_crypto_month,crypto):
-        crypto_eur = pd.read_csv(f"../data/exchange/{crypto}-EUR.csv")
-        crypto_eur["shift"] = crypto_eur.shift(1)["Close €"]
-        crypto_eur["Returns"] = (crypto_eur["Close €"] - crypto_eur["shift"] )/ crypto_eur["Close €"]
-    
-        merged_df = pd.merge(crypto_eur, df_crypto_month, on='Date', how='outer').fillna(0)
-        merged_df.loc[:,'QtyCumulative'] = merged_df["Qty"].cumsum()
-    
-        merged_df["Variation €"] = ( merged_df["Returns"]*merged_df["Close €"]*merged_df["QtyCumulative"] ).round(2)
-        merged_df["Holdings €"] = ( merged_df['Close €']*merged_df["QtyCumulative"] ).round(2)
-        
-        return merged_df
+                    df.columns = df.columns.str.strip() # remove whitespaces from columns
+                    df.Category = df.Category.str.strip()
+                    df.Subcategory = df.Subcategory.str.strip()
+                    df.Type = df.Type.str.strip()
+                    df.Symbol = df.Symbol.str.strip()
+                    if df.empty:
+                        continue
+                    else:
+                        dfl.append(df)
+                except Exception as e:
+                    print(e)
+                    continue
 
-class PF_Basic:
-    def extract_hist_expenses(df):
+            df_year_investments = pd.concat(dfl)
+            df_year_investments['Date'] = pd.to_datetime(df_year_investments['Date'])
+            df_year_investments.set_index('Date',inplace=True)
+            return df_year_investments
+        else:
+            print(f"{path} does not exist.")
+            return None
+
+class FinCalc:
+    def calc_monthly_cashflow(df_year_cashflow):
+        incomes = df_year_cashflow.loc[(df_year_cashflow["Category"] != "Transfer") & (df_year_cashflow["Qty"] > 0)]
+        liabilities = df_year_cashflow.loc[(df_year_cashflow["Category"] != "Transfer") & (df_year_cashflow["Qty"] <= 0)]
+
+        m_incomes = incomes.resample(rule='ME')['Qty'].sum()
+        m_liab = liabilities.resample(rule='ME')['Qty'].sum()
+        m_savings = incomes.resample(rule='ME')['Qty'].sum() + liabilities.resample(rule='ME')['Qty'].sum()
+        m_savingrate = df_year_cashflow.resample(rule='ME')['Qty'].sum() / incomes.resample(rule='ME')['Qty'].sum()
+
+        zipped = zip(
+            m_incomes.index,
+            m_incomes.values,
+            m_liab.values,
+            m_savings.values,
+            m_savingrate.values,
+        )
+
+        df_m_cashflow = pd.DataFrame(zipped,columns=["Date","incomes","liabilities","savings","saving_rate"])
+
+        return df_m_cashflow
+
+    def calc_expenses(df): # For donut plot expenses
         df_expenses = df.loc[ ((df["Category"] != "Transfer") & (df["Qty"] < 0)) ]
         expenses = df_expenses['Qty'].abs().values
         df_expenses = df_expenses.assign(Expenses = expenses) # Creates new columns "Expenses"
         
         return df_expenses
-    
-    def get_generals(df_year):
-        df_rev_year = df_year.loc[df_year["Type"] == "Revolut"]
-        df_hyp_year = df_year.loc[df_year["Type"] == "Hype"]
-        df_cash_year = df_year.loc[df_year["Type"] == "Cash"]
 
-        balance_revolut = round(df_rev_year['Qty'].sum(),2)
-        balance_hype = round(df_hyp_year['Qty'].sum(),2)
-        balance_cash = round(df_cash_year['Qty'].sum(),2)
-
-        incomes_hyp = round(df_hyp_year.loc[ ((df_hyp_year["Category"] != "Transfer") & (df_hyp_year["Qty"] > 0))]["Qty"].sum(),2)
-        incomes_rev = round(df_rev_year.loc[ ((df_rev_year["Category"] != "Transfer") & (df_rev_year["Qty"] > 0))]["Qty"].sum(),2)
-        incomes_cash = round(df_cash_year.loc[ ((df_cash_year["Category"] != "Transfer") & (df_cash_year["Qty"] > 0))]["Qty"].sum(),2)
-        
-        expenses_hyp = df_hyp_year.loc[((df_hyp_year["Category"] != "Transfer") & (df_hyp_year["Qty"] < 0))]["Qty"].sum()
-        expenses_rev = df_rev_year.loc[((df_rev_year["Category"] != "Transfer") & (df_rev_year["Qty"] < 0))]["Qty"].sum()
-        expenses_cash = df_cash_year.loc[((df_cash_year["Category"] != "Transfer") & (df_cash_year["Qty"] < 0))]["Qty"].sum()
-        expenses = round( expenses_hyp + expenses_rev + expenses_cash ,2)
-
-        incomes = round(incomes_hyp + incomes_rev + incomes_cash, 2)
-        return balance_hype, balance_revolut, incomes_hyp, expenses, balance_cash
-
-    def get_category_expenses(df_month):
-        category_totals = df_month.groupby('Category')['Qty'].sum().reset_index()
-        category_expenses = category_totals.copy().loc[category_totals['Qty'] < 0]
-        category_expenses.loc[:,"Expense"] = ( category_expenses['Qty'].abs() ).round(2)
-
-        return category_expenses
-
-class PF_Plot:
-    def general_view(df_cashflow):
+class FinPlot:
+    def plot_cashflow(df_cashflow):
         fig = make_subplots(specs=[[{"secondary_y": True}]])
         fig.add_trace(
             go.Bar(
-                x=df_cashflow["Month"],
-                y=df_cashflow["Incomes"],
-                name='Incomes',
+                x=df_cashflow["Date"],
+                y=df_cashflow["incomes"],
+                name='incomes',
                 marker_color='indianred'
             ),
             secondary_y = False
         )
         fig.add_trace(
             go.Bar(
-                x=df_cashflow["Month"],
-                y=df_cashflow["Expenses"].abs(),
-                name='Expenses',
+                x=df_cashflow["Date"],
+                y=df_cashflow["liabilities"].abs(),
+                name='liabilities',
                 marker_color='lightsalmon'
             ),
             secondary_y = False
         )
         fig.add_trace(
-            go.Scatter(x=df_cashflow["Month"],y=df_cashflow["Saving Rate"]*100, line=dict(color='red'), name='% Saving Rate'),
+            go.Scatter(x=df_cashflow["Date"],y=df_cashflow["saving_rate"]*100, line=dict(color='red'), name='% Saving Rate'),
             secondary_y = True
         )
         
         fig.update_layout(
-            title = "Incomes and Expenses 2024",
+            #title = "Cashflow",
+            title = {'text': 'Cashflow  Graph', 'x': 0.4, 'y': 0.85},
             barmode='group', xaxis_tickangle=0,
             width=1000, height=400,
             yaxis=dict(
@@ -133,7 +151,9 @@ class PF_Plot:
 
         return fig
 
-    def plot_hist_expenses(df_expenses, plot_categories = False):
+
+
+    def plot_expenses_donut(df_expenses, plot_categories = False):
         pxfig = px.sunburst(df_expenses, path=['Category', 'Subcategory'], values='Expenses')
         
         labels = pxfig['data'][0]['labels'].tolist()
@@ -144,6 +164,7 @@ class PF_Plot:
         else:
             values = pxfig['data'][0]['values'].tolist()
     
+        colors = ['#FF5733', '#33FF57', '#3357FF', '#F1C40F', '#8E44AD', '#E67E22']
         
         fig = go.Figure(
             go.Sunburst(
@@ -152,6 +173,7 @@ class PF_Plot:
                 values = values,
                 ids = ids,
                 branchvalues = "total",
+                marker=dict(colors=colors)
             )
         )
         fig.update_layout(
