@@ -69,6 +69,7 @@ class FinLoad:
         else:
             print(f"{path} does not exist.")
             return None
+    
 
 class FinCalc:
     def calc_monthly_cashflow(df_year_cashflow):
@@ -151,30 +152,25 @@ class FinPlot:
 
         return fig
 
-
-
-    def plot_expenses_donut(df_expenses, plot_categories = False):
-        pxfig = px.sunburst(df_expenses, path=['Category', 'Subcategory'], values='Expenses')
-        
-        labels = pxfig['data'][0]['labels'].tolist()
-        parents = pxfig['data'][0]['parents'].tolist()
-        ids = pxfig['data'][0]['ids'].tolist()
-        if plot_categories:
-            values = None
-        else:
-            values = pxfig['data'][0]['values'].tolist()
-    
-        colors = ['#FF5733', '#33FF57', '#3357FF', '#F1C40F', '#8E44AD', '#E67E22']
-        
-        fig = go.Figure(
-            go.Sunburst(
-                labels = labels,
-                parents = parents,
-                values = values,
-                ids = ids,
-                branchvalues = "total",
-                marker=dict(colors=colors)
-            )
+    def plot_expenses_donut(df_expenses):
+        category_colors = {
+            'Shop':      '#CDC1FF',
+            'Groceries': '#C96868',
+            'Other':     '#95D2B3',
+            'Leisure':   '#FCDC94',
+            'Transport': '#B9B28A',
+            'Subs':      '#C9E9D2',
+            'Health':    '#D4F6FF',
+            'Family':    '#FFCF9D',
+            'Holiday':   '#FEFBD8',
+            'Bills':     '#E7D4B5'
+        }
+        fig = px.sunburst(
+            df_expenses,
+            path=['Category', 'Subcategory'],
+            values='Qty',
+            color='Category',
+            color_discrete_map=category_colors  # Map the colors
         )
         fig.update_layout(
             title = dict(text="Expenses", x=0.5, y=0.95),
@@ -182,6 +178,7 @@ class FinPlot:
             height = 500, width = 500
         )
         return fig
+
     
     def plot_hist_expenses_month(df_months, months):
         specs = [[dict(type="domain") for i in range(3)] for j in range(4)]

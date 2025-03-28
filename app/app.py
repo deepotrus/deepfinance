@@ -93,7 +93,9 @@ app.layout = html.Div(
 )
 def update_plot_month_expenses(selected_month):
     df_expenses = FinCalc.calc_expenses(df_year_cashflow[ df_year_cashflow.index.month == selected_month ])
+    df_expenses["Qty"] = df_expenses.Qty.abs() # sunburst does not understand negative values
     fig_expenses_donut = FinPlot.plot_expenses_donut(df_expenses)
+
     return fig_expenses_donut
 
 if __name__ == "__main__":
