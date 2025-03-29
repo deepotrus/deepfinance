@@ -100,6 +100,8 @@ class FinCalc:
         
         return df_expenses
 
+
+
 class FinPlot:
     def plot_cashflow(df_cashflow):
         fig = make_subplots(specs=[[{"secondary_y": True}]])
