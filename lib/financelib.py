@@ -12,14 +12,20 @@ import requests
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
+import time # sleep fetch
+
 
 class FinLoad:
     def load_init_holdings(path: Path, YEAR: int):
         if path.exists():
-            with open(f"{path}/{YEAR}/{YEAR}_init.json") as file:
-                data = file.read()
-            init_holdings = json.loads(data)
-            return init_holdings
+            try:
+                with open(f"{path}/{YEAR}/{YEAR}_init.json") as file:
+                    data = file.read()
+                init_holdings = json.loads(data)
+                return init_holdings
+            except Exception as e:
+                print(e)
+                return None
         else:
             print(f"{path} does not exist.")
             return None
@@ -96,7 +102,7 @@ class FinCalc:
             m_savingrate.values,
         )
 
-        df_m_cashflow = pd.DataFrame(zipped,columns=["Date","incomes","liabilities","savings","saving_rate"])
+        df_m_cashflow = pd.DataFrame(zipped,columns=["Date","incomes","liabilities","savings","saving_rate"]).set_index("Date")
 
         return df_m_cashflow
 
@@ -209,6 +215,20 @@ class FinInvestmentsGet:
         
         return assets
 
+    # The final nice front end table
+    def get_total_holdings(assets):
+        dfl = list()
+        column_names = list()
+        for asset_class in assets.keys():
+            for symbol in assets[asset_class].keys():
+                # Append dataframe series
+                dfl.append(assets[asset_class][symbol]['Holdings'])
+                column_names.append(symbol)
+
+        df_year_holdings = pd.concat(dfl, axis=1, keys=column_names)
+        df_year_holdings['Total'] = df_year_holdings.sum(axis=1)
+        return df_year_holdings
+
 
 
 class FinFetch:
@@ -286,7 +306,7 @@ class FinPlot:
         fig = make_subplots(specs=[[{"secondary_y": True}]])
         fig.add_trace(
             go.Bar(
-                x=df_cashflow["Date"],
+                x=df_cashflow.index, # index is always datetime
                 y=df_cashflow["incomes"],
                 name='incomes',
                 marker_color='indianred'
@@ -295,7 +315,7 @@ class FinPlot:
         )
         fig.add_trace(
             go.Bar(
-                x=df_cashflow["Date"],
+                x=df_cashflow.index,
                 y=df_cashflow["liabilities"].abs(),
                 name='liabilities',
                 marker_color='lightsalmon'
@@ -303,7 +323,7 @@ class FinPlot:
             secondary_y = False
         )
         fig.add_trace(
-            go.Scatter(x=df_cashflow["Date"],y=df_cashflow["saving_rate"]*100, line=dict(color='red'), name='% Saving Rate'),
+            go.Scatter(x=df_cashflow.index,y=df_cashflow["saving_rate"]*100, line=dict(color='red'), name='% Saving Rate'),
             secondary_y = True
         )
         
