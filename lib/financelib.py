@@ -85,7 +85,20 @@ class FinLoad:
 
 
 class FinCalc:
-    def calc_monthly_cashflow(df_year_cashflow):
+    def calc_current_balance(df_year_cashflow, init_holdings):
+        current_balances = dict()
+        accounts = df_year_cashflow['Type'].unique().tolist()
+        for cc in accounts:
+            if cc in init_holdings['liquidity_eur'].keys():
+                val = df_year_cashflow.loc[df_year_cashflow["Type"] == cc]['Qty'].sum() + init_holdings['liquidity_eur'][cc]
+                current_balances[cc] = round(float(val), 2)
+            else:
+                val = df_year_cashflow.loc[df_year_cashflow["Type"] == cc]['Qty'].sum()
+                current_balances[cc] = round(float(val), 2)
+
+        return current_balances
+
+    def calc_monthly_cashflow(df_year_cashflow, init_holdings):
         incomes = df_year_cashflow.loc[(df_year_cashflow["Category"] != "Transfer") & (df_year_cashflow["Qty"] > 0)]
         liabilities = df_year_cashflow.loc[(df_year_cashflow["Category"] != "Transfer") & (df_year_cashflow["Qty"] <= 0)]
 
@@ -103,6 +116,12 @@ class FinCalc:
         )
 
         df_m_cashflow = pd.DataFrame(zipped,columns=["Date","incomes","liabilities","savings","saving_rate"]).set_index("Date")
+
+        # Calculate cumulative savings + init 
+        init_liquidity = 0
+        for cc, val in init_holdings['liquidity_eur'].items():
+            init_liquidity += val
+        df_m_cashflow['liquidity'] = df_m_cashflow['savings'].values.cumsum() + init_liquidity
 
         return df_m_cashflow
 
