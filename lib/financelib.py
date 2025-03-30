@@ -14,6 +14,15 @@ from dateutil.relativedelta import relativedelta
 
 import time # sleep fetch
 
+def define_end_date(YEAR: int):
+    today = datetime.now()
+    today_strf = today.strftime('%Y-%m-%d')
+    if today.year != YEAR:
+        end_date = f"{YEAR}-12-31"
+    else:
+        end_date = today_strf
+    return end_date
+
 
 class FinLoad:
     def load_init_holdings(path: Path, YEAR: int):
@@ -160,7 +169,9 @@ class FinInvestmentsGet:
     # as dates from january till december with zero values, and then updates it
     # with imported values from df_year_investments
     def get_holdings_monthlyized(df_year_investments, YEAR: int):
-        complete_index = pd.date_range(start=f'{YEAR}-01-01', end=f'{YEAR}-12-31', freq='ME') # End of month
+        start_date = f"{YEAR}-01-01" # for init_holdings
+        end_date = define_end_date(YEAR) 
+        complete_index = pd.date_range(start=start_date, end=end_date, freq='ME') # End of month
         df_month_fill = pd.DataFrame(index=complete_index, data=0.0, columns=["Qty"], dtype='float64')
 
         holdings_monthlyized = dict()
