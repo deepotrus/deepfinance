@@ -9,18 +9,24 @@ from plotly import express as px
 
 # For market data web scraping
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 
 import time # sleep fetch
 
+def last_day_of_previous_month(date):
+    first_day_of_current_month = date.replace(day=1)
+    last_day_of_prev_month = first_day_of_current_month - timedelta(days=1)
+    return last_day_of_prev_month
+
 def define_end_date(YEAR: int):
     today = datetime.now()
-    today_strf = today.strftime('%Y-%m-%d')
-    if today.year != YEAR:
+    #today_strf = today.strftime('%Y-%m-%d')
+    if today.year > YEAR: # full year of a past year
         end_date = f"{YEAR}-12-31"
-    else:
-        end_date = today_strf
+    else: # current year till last day of previous month
+        #end_date = today_strf
+        end_date = last_day_of_previous_month(today).strftime('%Y-%m-%d')
     return end_date
 
 
@@ -107,7 +113,7 @@ class FinCalc:
 
         return current_balances
 
-    def calc_monthly_cashflow(df_year_cashflow, init_holdings):
+    def calc_monthly_cashflow(df_year_cashflow, init_holdings, YEAR: int):
         incomes = df_year_cashflow.loc[(df_year_cashflow["Category"] != "Transfer") & (df_year_cashflow["Qty"] > 0)]
         liabilities = df_year_cashflow.loc[(df_year_cashflow["Category"] != "Transfer") & (df_year_cashflow["Qty"] <= 0)]
 
@@ -130,9 +136,19 @@ class FinCalc:
         init_liquidity = 0
         for cc, val in init_holdings['liquidity_eur'].items():
             init_liquidity += val
-        df_m_cashflow['liquidity'] = df_m_cashflow['savings'].values.cumsum() + init_liquidity
 
-        return df_m_cashflow
+        init_row = pd.DataFrame({
+            "incomes": ['-'],
+            "liabilities": ['-'],
+            "savings": [init_liquidity],
+            "saving_rate": ['-']
+        }, index=[datetime(YEAR-1, 12, 31)])
+
+        df_monthly_cashflow = pd.concat([init_row, df_m_cashflow])
+        df_monthly_cashflow['liquidity'] = df_monthly_cashflow['savings'].values.cumsum()
+
+        end_date = define_end_date(YEAR) 
+        return df_monthly_cashflow.loc[f"{YEAR-1}-12-31":end_date]
 
     def calc_expenses(df): # For donut plot expenses
         df_expenses = df.loc[ ((df["Category"] != "Transfer") & (df["Qty"] < 0)) ]
@@ -149,7 +165,7 @@ class FinInvestmentsGet:
             for symbol in symbols:
                 new_row = pd.DataFrame(
                     {
-                        'Date': [f"{YEAR}-01-01"],
+                        'Date': [f"{YEAR-1}-12-31"], # init is a snapshot of last year's day
                         'Type': [asset_class],
                         'Symbol': [symbol],
                         'Qty': [ init_holdings['assets'][asset_class][symbol] ],
@@ -169,7 +185,7 @@ class FinInvestmentsGet:
     # as dates from january till december with zero values, and then updates it
     # with imported values from df_year_investments
     def get_holdings_monthlyized(df_year_investments, YEAR: int):
-        start_date = f"{YEAR}-01-01" # for init_holdings
+        start_date = f"{YEAR-1}-12-31" # for init_holdings
         end_date = define_end_date(YEAR) 
         complete_index = pd.date_range(start=start_date, end=end_date, freq='ME') # End of month
         df_month_fill = pd.DataFrame(index=complete_index, data=0.0, columns=["Qty"], dtype='float64')
@@ -200,6 +216,7 @@ class FinInvestmentsGet:
     def get_assets_monthlyized(holdings_monthlyized, path: Path, YEAR: int):
         currency = 'EUR'
         years_watchback = 5
+        end_date = define_end_date(YEAR)
 
         assets_monthlyized = dict()
         for asset_class in holdings_monthlyized.keys():
@@ -215,7 +232,7 @@ class FinInvestmentsGet:
                         asset_history = FinFetch.fetch_etf_data(symbol, currency, years_watchback)
                     time.sleep(5) # sleep for preventing status resp 500 (ip addres based limitation)
                     
-                    asset_history = asset_history.loc[f'{YEAR}-01-01':f'{YEAR}-12-31']
+                    asset_history = asset_history.loc[f'{YEAR-1}-12-31':end_date]
                     asset_history.to_csv(maket_data_path)
                     print(f"Data saved in local to {maket_data_path}")
                 else:
@@ -332,7 +349,8 @@ class FinFetch:
             return None
 
 class FinPlot:
-    def plot_cashflow(df_cashflow):
+    def plot_cashflow(df_m_cashflow):
+        df_cashflow = df_m_cashflow.iloc[1:]  # new df without the first row of init
         fig = make_subplots(specs=[[{"secondary_y": True}]])
         fig.add_trace(
             go.Bar(
