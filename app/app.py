@@ -1,7 +1,6 @@
 from dash import Dash, dcc, html, dash_table
 from dash import Input, Output, callback
 
-
 import pandas as pd
 pd.options.display.float_format = "{:,.2f}".format
 
@@ -9,32 +8,27 @@ import sys
 sys.path.append('../lib/')
 from financelib import FinLoad
 from financelib import FinCalc
+from financelib import FinFetch
+from financelib import FinInvestmentsGet
 from financelib import FinPlot
-from pathlib import Path
 
-YEAR = 2024
-data_path_o = Path("../../tmp/data")
+from pathlib import Path
+data_path_o = Path("../../data")
+
+YEAR = 2025
 
 init_holdings = FinLoad.load_init_holdings(data_path_o, YEAR)
 df_year_cashflow = FinLoad.load_cashflow(data_path_o, YEAR)
 df_year_investments = FinLoad.load_investments(data_path_o, YEAR)
 
-
-
-df_m_cashflow = FinCalc.calc_monthly_cashflow(df_year_cashflow)
-fig_cashflow = FinPlot.plot_cashflow(df_m_cashflow)
-
-# Format to 2 decimals
-df_m_cashflow['incomes'] = df_m_cashflow['incomes'].map("{:,.2f}".format)
-df_m_cashflow['liabilities'] = df_m_cashflow['liabilities'].map("{:,.2f}".format)
-df_m_cashflow['savings'] = df_m_cashflow['savings'].map("{:,.2f}".format)
-df_m_cashflow['saving_rate'] = df_m_cashflow['saving_rate'].map("{:,.2f}".format)
-
-# Decorate dash table plot
-df_m_cashflow['Date'] = pd.to_datetime(df_m_cashflow['Date']).dt.strftime('%B, %Y')
-df_m_cashflow = df_m_cashflow.set_index("Date").T
-df_m_cashflow.reset_index(inplace=True) # Reset index to maintain labels on the left side
-df_m_cashflow.columns = [''] + list(df_m_cashflow.columns[1:]) # Rename the first column to something meaningful
+df_m_cashflow = FinCalc.calc_monthly_cashflow(df_year_cashflow, init_holdings, YEAR).round(2)
+row_today_cashflow = FinCalc.calc_curr_month_cashflow(df_year_cashflow, df_m_cashflow).round(2)
+df_cashflow = pd.concat([df_m_cashflow, row_today_cashflow])
+fig_cashflow = FinPlot.plot_cashflow(df_cashflow)
+columns = list()
+columns.append({"name": "Date", "id": "index"})
+for i in df_cashflow.columns:
+    columns.append({"name": i, "id": i})
 
 
 app = Dash(__name__)
@@ -46,11 +40,11 @@ app.layout = html.Div(
                 html.H1("Andrei's Personal Finance"),
             ]
         ),
-        html.H2("Cashflow 2024"),
+        html.H2(f"Cashflow {YEAR}"),
         dash_table.DataTable(
-            id='table',
-            columns=[{"name": str(i), "id": str(i)} for i in df_m_cashflow.columns],  # Use transposed columns
-            data=df_m_cashflow.reset_index().to_dict('records'),  # Convert transposed DataFrame to a list of dictionaries
+            id='table-cashflow',
+            columns=columns,
+            data=df_cashflow.reset_index().to_dict('records'),  # Convert transposed DataFrame to a list of dictionaries
             page_size=10,  # Number of rows per page
             style_table={'overflowX': 'auto'},  # Enable horizontal scrolling
             style_cell={'textAlign': 'left'},  # Align text to the left
@@ -62,7 +56,7 @@ app.layout = html.Div(
                 dcc.Graph(figure=fig_cashflow)
             ]
         ),
-        html.H2("Expenses 2024"),
+        html.H2(f"Expenses {YEAR}"),
         dcc.Dropdown(
             id='month-expenses-combobox',
             options=[
