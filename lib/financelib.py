@@ -9,6 +9,14 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 
 import time # sleep fetch
+import random # for random time sleeps to prevent 429
+
+user_agents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0',
+]
 
 def last_day_of_previous_month(date):
     first_day_of_current_month = date.replace(day=1)
@@ -334,7 +342,7 @@ class FinInvestmentsGet:
                         asset_history = FinFetch.fetch_crypto_data(symbol, currency, years_watchback)
                     elif asset_class == "ETFs":
                         asset_history = FinFetch.fetch_etf_data(symbol, currency, years_watchback)
-                    time.sleep(5) # sleep for preventing status resp 500 (ip addres based limitation)
+                    time.sleep(random.uniform(5,7)) # sleep for preventing status resp 500 (ip addres based limitation)
                     
                     asset_history = asset_history.loc[f'{YEAR-1}-12-31':end_date]
                     asset_history.to_csv(maket_data_path)
@@ -348,7 +356,7 @@ class FinInvestmentsGet:
                             update = FinFetch.fetch_crypto_data(symbol, currency, years_watchback=1)
                         elif asset_class == "ETFs":
                             update = FinFetch.fetch_etf_data(symbol, currency, years_watchback=1)
-                        time.sleep(5) # sleep for preventing status resp 500 (ip addres based limitation)
+                        time.sleep(random.uniform(5,7)) # sleep for preventing status resp 500 (ip addres based limitation)
                         
                         df_update_red = update.loc[last_date_str:define_end_date(YEAR)]
                         # always exclude first row which is redundant for pd.concat
@@ -379,7 +387,7 @@ class FinInvestmentsGet:
                     asset_today = FinFetch.fetch_crypto_data_today(symbol, currency)
                 elif asset_class == "ETFs":
                     asset_today = FinFetch.fetch_etf_data_today(symbol, currency)
-                time.sleep(3) # sleep for preventing status resp 500 (ip addres based limitation)
+                time.sleep(random.uniform(5,7)) # sleep for preventing status resp 500 (ip addres based limitation)
                 
                 prev_month_close = float(assets_monthlyized[asset_class][symbol].iloc[-1].Close)
                 asset_today["Returns"] = (asset_today["Close"] - prev_month_close )/ asset_today["Close"]
@@ -504,7 +512,7 @@ class FinFetch:
     def fetch_crypto_data_today(symbol, currency="EUR", years_watchback=1):
         # Now get real time market data
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}-{currency}?range={years_watchback}y&interval=1d"
-        headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0'} # Set the user agent to mimic a web browser, otherwise error 429 too many requests
+        headers = {'User-Agent': user_agents[0]} # Set the user agent to mimic a web browser, otherwise error 429 too many requests
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             data = response.json()
