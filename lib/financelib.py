@@ -444,7 +444,7 @@ class FinInvestmentsGet:
 class FinFetch:
     def fetch_crypto_data(symbol, currency="EUR", years_watchback=3):
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}-{currency}?range={years_watchback}y&interval=1mo"
-        headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0'} # Set the user agent to mimic a web browser, otherwise error 429 too many requests
+        headers = {'User-Agent': user_agents[0]} # Set the user agent to mimic a web browser, otherwise error 429 too many requests
         response = requests.get(url, headers=headers)
 
         if response.status_code == 200:
@@ -479,7 +479,7 @@ class FinFetch:
         query_start_date = ( today - relativedelta(years=years_watchback) ).strftime('%Y-%m-%d')
 
         url = f"https://www.justetf.com/api/etfs/{isin}/performance-chart?locale=en&currency={currency}&valuesType=MARKET_VALUE&reduceData=true&includeDividends=false&features=DIVIDENDS&dateFrom={query_start_date}&dateTo={query_end_date}"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'} # User agent to mimic a web browser, otherwise error 429 too many requests
+        headers = {'User-Agent': user_agents[0]} # User agent to mimic a web browser, otherwise error 429 too many requests
 
         response = requests.get(url, headers=headers)
 
@@ -541,7 +541,7 @@ class FinFetch:
         query_start_date = ( today - relativedelta(months=1) ).strftime('%Y-%m-%d')
 
         url = f"https://www.justetf.com/api/etfs/{isin}/performance-chart?locale=en&currency={currency}&valuesType=MARKET_VALUE&reduceData=true&includeDividends=false&features=DIVIDENDS&dateFrom={query_start_date}&dateTo={query_end_date}"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'} # User agent to mimic a web browser, otherwise error 429 too many requests
+        headers = {'User-Agent': user_agents[0]} # User agent to mimic a web browser, otherwise error 429 too many requests
 
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
