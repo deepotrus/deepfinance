@@ -179,6 +179,11 @@ class FinCalc:
         )
 
         df_m_cashflow = pd.DataFrame(zipped,columns=["Date","incomes","liabilities","savings","saving_rate","investments"]).set_index("Date")
+        
+        # if in a month no transactions happen, then add column of that month filled with zero
+        df_m_cashflow = df_m_cashflow.reindex(temp_fill.index, fill_value=0)
+
+
         # Calculate cumulative savings + init 
         init_liquidity = 0
         for cc, val in init_holdings['liquidity_eur'].items():
@@ -210,7 +215,10 @@ class FinCalc:
         m_liab        = float(liabilities['Qty'].sum()  )
         m_savings     = float(incomes    ['Qty'].sum() + liabilities['Qty'].sum()  )
         m_investments = float(investments['Qty'].sum()  )
-        m_savingrate  = float(m_savings / m_incomes     )
+        try:
+            m_savingrate  = float(m_savings / m_incomes     )
+        except Exception as ZeroDivisionError:
+            m_savingrate = 0;
 
         row_today_cashflow = pd.DataFrame({
             "incomes": [m_incomes],
