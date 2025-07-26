@@ -170,19 +170,15 @@ class FinCalc:
         temp_fill.update(m_investments)
 
         zipped = zip(
-            m_incomes.index,
-            m_incomes.values,
-            m_liab.values,
-            m_savings.values,
-            m_savingrate.values,
-            temp_fill.values, # m_investments
+            m_incomes.index, m_incomes.values,
+            m_liab.values, m_savings.values,
+            m_savingrate.values, temp_fill.values, # m_investments
         )
 
         df_m_cashflow = pd.DataFrame(zipped,columns=["Date","incomes","liabilities","savings","saving_rate","investments"]).set_index("Date")
         
         # if in a month no transactions happen, then add column of that month filled with zero
         df_m_cashflow = df_m_cashflow.reindex(temp_fill.index, fill_value=0)
-
 
         # Calculate cumulative savings + init 
         init_liquidity = 0
