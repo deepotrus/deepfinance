@@ -29,6 +29,7 @@ class FinCashflow:
         self.init_holdings : Dict[str, float] = load_init_holdings(self.path, self.YEAR)
         self.df_year_cashflow : pd.DataFrame = load_data("cashflow", self.path, self.YEAR)
         self.df_m_cashflow : pd.DataFrame = pd.DataFrame()
+        self.df_last_month_cashflow : pd.DataFrame = pd.DataFrame()
         pass
 
     def get_all_balances(self):
@@ -75,6 +76,13 @@ class FinCashflow:
         m_investments = investments.resample(rule='ME')['Qty'].sum()
         m_savingrate = m_savings / m_incomes
 
+        Logger.debug("\n m_incomes:\n%s", m_incomes.to_string())
+        Logger.debug("\n m_liab:\n%s", m_liab.to_string())
+        Logger.debug("\n m_savings:\n%s", m_savings.to_string())
+        Logger.debug("\n m_investments:\n%s", m_investments.to_string())
+        Logger.debug("\n m_savingrate:\n%s", m_savingrate.to_string())
+
+
         # Add fill values to m_investments otherwise shifted data
         complete_index = pd.date_range(start=f"{self.YEAR}-01-01", end=end_date, freq='ME') # End of month
         df_month_fill = pd.DataFrame(index=complete_index, data=0.0, columns=["Qty"], dtype='float64')
@@ -109,6 +117,35 @@ class FinCashflow:
         df_monthly_cashflow['liquidity'] = df_monthly_cashflow['savings'].values.cumsum() - df_monthly_cashflow['investments'].abs().values.cumsum()
         return df_monthly_cashflow
 
+    def calc_curr_month_cashflow(self):
+        today_date_str, today_month_str, today = define_today_date()
+        prev_month_liquidity, prev_month_investments = define_prev_month_holdings(self.df_m_cashflow)
+        df_curr_month_cashflow = self.df_year_cashflow.loc[today_month_str]
+
+        incomes = df_curr_month_cashflow.loc[(df_curr_month_cashflow["Category"] != "Transfer") & (df_curr_month_cashflow["Qty"] > 0)]
+        liabilities = df_curr_month_cashflow.loc[(df_curr_month_cashflow["Category"] != "Transfer") & (df_curr_month_cashflow["Qty"] <= 0)]
+        investments = df_curr_month_cashflow.loc[ (df_curr_month_cashflow["Category"] == "Transfer") & (df_curr_month_cashflow["Subcategory"] == "Invest")]
+
+        m_incomes     = float(incomes    ['Qty'].sum()  )
+        m_liab        = float(liabilities['Qty'].sum()  )
+        m_savings     = float(incomes    ['Qty'].sum() + liabilities['Qty'].sum()  )
+        m_investments = float(investments['Qty'].sum()  )
+        try:
+            m_savingrate  = float(m_savings / m_incomes     )
+        except Exception as ZeroDivisionError:
+            m_savingrate = 0;
+
+        row_today_cashflow = pd.DataFrame({
+            "incomes": [m_incomes],
+            "liabilities": [m_liab],
+            "savings": [m_savings],
+            "saving_rate": [m_savingrate],
+            "investments": [prev_month_investments + m_investments],
+            "liquidity": [prev_month_liquidity + m_savings - abs(m_investments)]
+        }, index=[datetime(today.year, today.month, today.day)])
+
+        return row_today_cashflow
+
     def run(self):
         self.df_m_cashflow = self.calc_monthly_cashflow()
-
+        self.df_last_month_cashflow = self.calc_curr_month_cashflow()
